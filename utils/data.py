@@ -47,14 +47,16 @@ class Datasets:
 
     def __init__(self,root,download=True,dataset="butterfly"):
         self.root = root
+        if not os.path.exists(self.root):
+            os.mkdir(self.root)
         self.download = download
         self.dataset = dataset
         self.data_dir = os.path.join(self.root,self.datasets[self.dataset])
         if os.path.exists(self.data_dir):
             self.download = False
         if self.download:
-            filename = wget.download(self.urls[self.dataset],out=root)
-            if self.checkmd5(os.path.join(root,filename)):
+            filename = wget.download(self.urls[self.dataset],out=self.root)
+            if self.checkmd5(filename):
                 print("MD5 check pass!")
             else:
                 print("MD5 check fail!")
