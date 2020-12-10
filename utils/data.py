@@ -67,7 +67,9 @@ class Datasets:
         self.trainset, self.testset = self.get_dataset()
 
     def checkmd5(self,file):
-        return md5(file).hexdigest() == self.md5s[self.dataset]
+        with open(file,"rb") as f:
+            result = md5(f).hexdigest() == self.md5s[self.dataset]
+        return result
 
     def get_dataset(self):
         if self.dataset == "butterfly":
