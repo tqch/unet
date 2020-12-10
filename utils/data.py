@@ -70,7 +70,7 @@ class Datasets:
 
     def checkmd5(self,file):
         with open(file,"rb") as f:
-            result = md5(f).hexdigest() == self.md5s[self.dataset]
+            result = md5(f.read()).hexdigest() == self.md5s[self.dataset]
         return result
 
     def get_dataset(self):
