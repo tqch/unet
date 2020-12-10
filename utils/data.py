@@ -27,7 +27,7 @@ class ButterflyDataset(Dataset):
         with Image.open(os.path.join(self.root, item["data"])) as image:
             out_image = self.transform(image)
         with Image.open(os.path.join(self.root, item["mask"])) as mask:
-            out_mask = self.transform(mask).long()
+            out_mask = self.transform(mask.convert("1")).long()
         return out_image,out_mask
 
     def __len__(self):
@@ -56,6 +56,7 @@ class Datasets:
             self.download = False
         if self.download:
             filename = wget.download(self.urls[self.dataset],out=self.root)
+            print("\nDataset sucessfully downloaded!")
             if self.checkmd5(filename):
                 print("MD5 check pass!")
             else:

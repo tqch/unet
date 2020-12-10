@@ -139,11 +139,11 @@ if __name__ == "__main__":
     root = "./dataset"
     dataset = Datasets(root)
     trainloader = DataLoader(dataset.trainset,batch_size=8,shuffle=True)
-    testloader = DataLoader(dataset.testset, batch_size=16, shuffle=False)
+    testloader = DataLoader(dataset.testset, batch_size=16,shuffle=False)
 
     chan_seq = [3, 64, 128, 256, 512, 1024]
     model = UNet(chan_seq)
     loss_fn = nn.CrossEntropyLoss(reduction="mean")
     optim = Adam(model.parameters())
     model.to(device)
-    train(model,trainloader,loss_fn,optim,testloader,epochs=5)
+    train(model,trainloader,loss_fn,optim,testloader,epochs=1)
