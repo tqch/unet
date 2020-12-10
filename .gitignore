@@ -1,2 +1,4 @@
 test.py
 dataset
+__pycache__
+*/__pycache__
