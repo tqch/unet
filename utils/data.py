@@ -61,7 +61,7 @@ class Datasets:
             else:
                 print("MD5 check fail!")
                 exit()
-            with ZipFile(os.path.join(root,filename)) as zip:
+            with ZipFile(filename) as zip:
                 zip.extractall(path=root)
         else:
             print("Dataset exists!")
