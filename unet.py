@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from collections import OrderedDict,deque
 
 
 class ContractBlock(nn.Module):
@@ -40,45 +41,44 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class UNet(nn.Module):
-    def __init__(self, chan_seq, n_class=2, device=device):
+
+    ContractBlock = ContractBlock
+    ExpandBlock = ExpandBlock
+
+    def __init__(self, progression_order, n_class=2):
         super(UNet, self).__init__()
-        self.chan_seq = chan_seq
-        self.contract_layers = [
-            self._get_contract_block(chan_seq[i], chan_seq[i + 1]) \
-            for i in range(len(self.chan_seq) - 2)
-        ]
-        self.expand_layers = [
-            self._get_expand_block(chan_seq[i], chan_seq[i - 1]) \
-            for i in range(len(self.chan_seq) - 1, 1, -1)
-        ]
+        self.progression_order = progression_order
+        self.depth = len(self.progression_order)
+        self.contraction = nn.Sequential(OrderedDict([
+            (
+                f"ContractBlock_{i+1}", 
+                self.ContractBlock(self.progression_order[i], self.progression_order[i+1])
+            ) 
+            for i in range(self.depth - 2)
+        ]))
+        self.expansion = nn.Sequential(OrderedDict([
+            (
+                f"ExpandBlock_{i+1}", 
+                self.ExpandBlock(self.progression_order[i], self.progression_order[i - 1])
+            )
+            for i in range(self.depth - 1, 1, -1)
+        ]))
         self.bottom = nn.Sequential(
-            nn.Conv2d(chan_seq[-2], chan_seq[-1], 3, 1, 1),
+            nn.Conv2d(self.progression_order[-2], self.progression_order[-1], 3, 1, 1),
             nn.ReLU(),
-            nn.Conv2d(chan_seq[-1], chan_seq[-1], 3, 1, 1),
+            nn.Conv2d(self.progression_order[-1], self.progression_order[-1], 3, 1, 1),
             nn.ReLU()
         )
-        self.conv1x1 = nn.Conv2d(chan_seq[1], n_class, 1)
-        self.device = device
-
-        for contract_layer in self.contract_layers:
-            contract_layer.to(self.device)
-        for expand_layer in self.expand_layers:
-            expand_layer.to(self.device)
-
-    def _get_contract_block(self, in_chans, out_chans, k=3, s=1, p=1):
-        return ContractBlock(in_chans, out_chans, k, s, p)
-
-    def _get_expand_block(self, in_chans, out_chans, k=3, s=1, p=1):
-        return ExpandBlock(in_chans, out_chans, k, s, p)
+        self.conv1x1 = nn.Conv2d(self.progression_order[1], n_class, 1)
 
     def forward(self, x):
-        concats = []
-        for contract_layer in self.contract_layers:
-            x, concat = contract_layer(x)
+        concats = deque(maxlen=len(self.contraction))
+        for contract_block in self.contraction.children():
+            x, concat = contract_block(x)
             concats.append(concat)
         x = self.bottom(x)
-        for expand_layer, concat in zip(self.expand_layers, concats[-1::-1]):
-            x = expand_layer(x, concat)
+        for expand_block in self.expansion.children():
+            x = expand_block(x, concats.pop())
         x = self.conv1x1(x)
         return x
 
@@ -133,6 +133,7 @@ def train(model,trainloader,loss_fn,optim,testloader=None,epochs=20,device=devic
 
 
 if __name__ == "__main__":
+    
     from utils.data import Datasets
     from torch.optim import Adam
 
@@ -141,8 +142,8 @@ if __name__ == "__main__":
     trainloader = DataLoader(dataset.trainset,batch_size=8,shuffle=True)
     testloader = DataLoader(dataset.testset, batch_size=16,shuffle=False)
 
-    chan_seq = [3, 64, 128, 256, 512, 1024]
-    model = UNet(chan_seq)
+    progression_order = [3, 64, 128, 256, 512, 1024]
+    model = UNet(progression_order)
     loss_fn = nn.CrossEntropyLoss(reduction="mean")
     optim = Adam(model.parameters())
     model.to(device)
