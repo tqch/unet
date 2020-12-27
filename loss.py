@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -42,7 +43,6 @@ def focal_loss(logits,targets,lbd=0,alpha=1,reduction="mean"):
 
 
 if __name__ == "__main__":
-    import torch
     fl_loss = FocalLoss()
     ce_loss = nn.CrossEntropyLoss()
     logits = 3*torch.randn(128,10)
