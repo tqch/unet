@@ -1,10 +1,12 @@
+import os
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from collections import OrderedDict,deque
+from collections import OrderedDict, deque
+from utils.plot import plot_masks
 
 
 class ContractBlock(nn.Module):
@@ -37,11 +39,7 @@ class ExpandBlock(nn.Module):
         return out
 
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
 class UNet(nn.Module):
-
     ContractBlock = ContractBlock
     ExpandBlock = ExpandBlock
 
@@ -51,14 +49,14 @@ class UNet(nn.Module):
         self.depth = len(self.progression_order)
         self.contraction = nn.Sequential(OrderedDict([
             (
-                f"ContractBlock_{i+1}", 
-                self.ContractBlock(self.progression_order[i], self.progression_order[i+1])
-            ) 
+                f"ContractBlock_{i + 1}",
+                self.ContractBlock(self.progression_order[i], self.progression_order[i + 1])
+            )
             for i in range(self.depth - 2)
         ]))
         self.expansion = nn.Sequential(OrderedDict([
             (
-                f"ExpandBlock_{i+1}", 
+                f"ExpandBlock_{i + 1}",
                 self.ExpandBlock(self.progression_order[i], self.progression_order[i - 1])
             )
             for i in range(self.depth - 1, 1, -1)
@@ -83,29 +81,49 @@ class UNet(nn.Module):
         return x
 
 
-def train(model,trainloader,loss_fn,optim,testloader=None,epochs=20,device=device):
+def train(
+        model,
+        trainloader,
+        loss_fn,
+        optimizer,
+        scheduler=None,
+        testloader=None,
+        epochs=20,
+        device=torch.device("cpu"),
+        saveplot=False,
+        image_dir="./images"
+):
     for e in range(epochs):
         running_loss = 0.0
         running_correct = 0.0
         running_pixels = 0
-        with tqdm(trainloader,desc=f"{e+1}/{epochs} epochs:") as t:
-            for i,batch in enumerate(t):
+        with tqdm(trainloader, desc=f"{e + 1}/{epochs} epochs:") as t:
+            for i, batch in enumerate(t):
                 x = batch[0].to(device)
                 y = batch[1].to(device).squeeze(dim=1)
                 out = model(x)
-                loss = loss_fn(out,y)
-                optim.zero_grad()
+                loss = loss_fn(out, y)
+                optimizer.zero_grad()
                 loss.backward()
-                optim.step()
-                running_loss += loss.item()*np.prod(y.shape)
-                running_correct += (out.max(dim=1)[1]==y).sum().item()
+                optimizer.step()
+                running_loss += loss.item() * np.prod(y.shape)
+                running_correct += (out.max(dim=1)[1] == y).sum().item()
                 running_pixels += np.prod(y.shape)
-                if i != len(t)-1:
+                if i != len(t) - 1:
                     t.set_postfix({
-                        "train_loss": running_loss/running_pixels,
-                        "train_acc": running_correct/running_pixels
+                        "train_loss": running_loss / running_pixels,
+                        "train_acc": running_correct / running_pixels
                     })
                 else:
+                    if saveplot:
+                        plot_masks(
+                            out.max(dim=1, keepdims=True)[1].detach().cpu(),
+                            y.cpu(),
+                            path=os.path.join(image_dir, f"Epoch_{e + 1}.png"),
+                            title=f"Epoch {e + 1}:"
+                        )
+                    if scheduler is not None:
+                        scheduler.step()
                     if testloader is not None:
                         test_running_loss = 0.0
                         test_running_correct = 0.0
@@ -115,38 +133,41 @@ def train(model,trainloader,loss_fn,optim,testloader=None,epochs=20,device=devic
                                 x = test_batch[0].to(device)
                                 y = test_batch[1].to(device).squeeze(dim=1)
                                 out = model(x)
-                                loss = loss_fn(out,y)
-                                test_running_loss += loss.item()*np.prod(y.shape)
-                                test_running_correct += (out.max(dim=1)[1]==y).sum().item()
+                                loss = loss_fn(out, y)
+                                test_running_loss += loss.item() * np.prod(y.shape)
+                                test_running_correct += (out.max(dim=1)[1] == y).sum().item()
                                 test_running_pixels += np.prod(y.shape)
                         t.set_postfix({
-                            "train_loss": running_loss/running_pixels,
-                            "train_acc": running_correct/running_pixels,
-                            "test_loss": test_running_loss/test_running_pixels,
-                            "test_acc": test_running_correct/test_running_pixels
+                            "train_loss": running_loss / running_pixels,
+                            "train_acc": running_correct / running_pixels,
+                            "test_loss": test_running_loss / test_running_pixels,
+                            "test_acc": test_running_correct / test_running_pixels
                         })
                     else:
                         t.set_postfix({
-                            "train_loss": running_loss/running_pixels,
-                            "train_acc": running_correct/running_pixels
+                            "train_loss": running_loss / running_pixels,
+                            "train_acc": running_correct / running_pixels
                         })
 
 
 if __name__ == "__main__":
-    
     from utils.data import Datasets
-    from torch.optim import Adam
+    from torch.optim import Adam, lr_scheduler
     from loss import FocalLoss
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     root = "./dataset"
     dataset = Datasets(root)
-    trainloader = DataLoader(dataset.trainset,batch_size=8,shuffle=True)
-    testloader = DataLoader(dataset.testset, batch_size=16,shuffle=False)
+    trainloader = DataLoader(dataset.trainset, batch_size=8, shuffle=True)
+    testloader = DataLoader(dataset.testset, batch_size=16, shuffle=False)
 
     progression_order = [3, 64, 128, 256, 512, 1024]
     model = UNet(progression_order)
     # loss_fn = nn.CrossEntropyLoss(reduction="mean")
     loss_fn = FocalLoss(lbd=2)
-    optim = Adam(model.parameters())
+    optimizer = Adam(model.parameters(), lr=5e-4)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=5)
     model.to(device)
-    train(model,trainloader,loss_fn,optim,testloader,epochs=1)
+
+    train(model, trainloader, loss_fn, optimizer, scheduler, testloader, epochs=10, device=device, saveplot=True)
