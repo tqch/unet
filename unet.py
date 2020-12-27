@@ -136,6 +136,7 @@ if __name__ == "__main__":
     
     from utils.data import Datasets
     from torch.optim import Adam
+    from loss import FocalLoss
 
     root = "./dataset"
     dataset = Datasets(root)
@@ -144,7 +145,8 @@ if __name__ == "__main__":
 
     progression_order = [3, 64, 128, 256, 512, 1024]
     model = UNet(progression_order)
-    loss_fn = nn.CrossEntropyLoss(reduction="mean")
+    # loss_fn = nn.CrossEntropyLoss(reduction="mean")
+    loss_fn = FocalLoss()
     optim = Adam(model.parameters())
     model.to(device)
     train(model,trainloader,loss_fn,optim,testloader,epochs=1)
