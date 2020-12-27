@@ -146,7 +146,7 @@ if __name__ == "__main__":
     progression_order = [3, 64, 128, 256, 512, 1024]
     model = UNet(progression_order)
     # loss_fn = nn.CrossEntropyLoss(reduction="mean")
-    loss_fn = FocalLoss()
+    loss_fn = FocalLoss(lbd=2)
     optim = Adam(model.parameters())
     model.to(device)
     train(model,trainloader,loss_fn,optim,testloader,epochs=1)
