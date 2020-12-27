@@ -15,8 +15,7 @@ class FocalLoss(nn.Module):
         logp = F.log_softmax(logits,dim=1)
         alpha = self.alpha
         if isinstance(self.alpha,int):
-            alpha = torch.Tensor([self.alpha,])
-            alpha = alpha.repeat(logits.size(1))
+            alpha = self.alpha*torch.ones(logits.size(1)).to(targets)
         loss = -(1-logp.exp()).pow(self.lbd)*logp
         loss = loss.gather(dim=1,index=targets.unsqueeze(1)).squeeze(1)
         loss.mul_(alpha[targets])
@@ -30,8 +29,7 @@ class FocalLoss(nn.Module):
 def focal_loss(logits,targets,lbd=0,alpha=1,reduction="mean"):
     logp = F.log_softmax(logits, dim=1)
     if isinstance(alpha, int):
-        alpha = torch.Tensor([alpha, ])
-        alpha = alpha.repeat(logits.size(1))
+        alpha = self.alpha * torch.ones(logits.size(1)).to(targets)
     loss = -(1 - logp.exp()).pow(lbd) * logp
     loss = loss.gather(dim=1,index=targets.unsqueeze(1)).squeeze(1)
     loss.mul_(alpha[targets])
